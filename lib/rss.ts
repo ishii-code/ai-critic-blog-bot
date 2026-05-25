@@ -129,8 +129,8 @@ export async function fetchAllFeeds(lookbackHours = 24): Promise<Article[]> {
     }
   }
 
-  console.log(
-    `Fetched ${allArticles.length} articles from ${successCount}/${enabledSources.length} sources`,
+  process.stderr.write(
+    `Fetched ${allArticles.length} articles from ${successCount}/${enabledSources.length} sources\n`,
   )
 
   return allArticles
