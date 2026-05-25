@@ -1,0 +1,22 @@
+{
+  "name": "ai-critic-blog-bot",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test:rss": "tsx scripts/test-rss-fetch.ts",
+    "test:article": "tsx scripts/test-single-article.ts",
+    "fetch-news": "tsx scripts/cli-fetch-news.ts",
+    "publish-blog": "tsx scripts/cli-publish-blog.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "latest",
+    "better-sqlite3": "^12.10.0",
+"rss-parser": "^3.13.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^20",
+    "tsx": "^4.19.3",
+    "typescript": "^5"
+  }
+}

@@ -1,0 +1,270 @@
+{
+  "version": "1.0",
+  "updated_at": "2026-05-24",
+  "description": "AI批評家ブログのニュースソース定義。5層構成で多様性とバランスを担保する。",
+  "sources": [
+    {
+      "name": "Anthropic News",
+      "tier": 1,
+      "category": "official",
+      "language": "en",
+      "url": "https://www.anthropic.com/news/rss.xml",
+      "enabled": true,
+      "verify_url": true,
+      "notes": "Claude発表元。実装時にURLを実機確認すること"
+    },
+    {
+      "name": "OpenAI Blog",
+      "tier": 1,
+      "category": "official",
+      "language": "en",
+      "url": "https://openai.com/blog/rss.xml",
+      "enabled": true,
+      "verify_url": true,
+      "notes": "過去にURL変更履歴あり、要確認"
+    },
+    {
+      "name": "Google AI Blog",
+      "tier": 1,
+      "category": "official",
+      "language": "en",
+      "url": "https://blog.google/technology/ai/rss/",
+      "enabled": true,
+      "notes": "Gemini系発表"
+    },
+    {
+      "name": "Meta AI",
+      "tier": 1,
+      "category": "official",
+      "language": "en",
+      "url": "https://ai.meta.com/blog/rss/",
+      "enabled": true,
+      "notes": "Llama系発表"
+    },
+    {
+      "name": "DeepMind Blog",
+      "tier": 1,
+      "category": "official",
+      "language": "en",
+      "url": "https://deepmind.google/blog/rss.xml",
+      "enabled": true,
+      "notes": "研究寄り"
+    },
+    {
+      "name": "Ledge.ai",
+      "tier": 2,
+      "category": "japanese_media",
+      "language": "ja",
+      "url": "https://ledge.ai/feed",
+      "enabled": true,
+      "notes": "日本最大級のAI特化メディア、ビジネス事例多め"
+    },
+    {
+      "name": "ITmedia AI+",
+      "tier": 2,
+      "category": "japanese_media",
+      "language": "ja",
+      "url": "https://rss.itmedia.co.jp/rss/2.0/ai.xml",
+      "enabled": true,
+      "notes": "速報性、業界ニュース"
+    },
+    {
+      "name": "Publickey",
+      "tier": 2,
+      "category": "japanese_media",
+      "language": "ja",
+      "url": "https://www.publickey1.jp/atom.xml",
+      "enabled": true,
+      "keyword_filter": "ai_required",
+      "notes": "技術寄り、AI以外も含む。キーワードフィルタ必須"
+    },
+    {
+      "name": "gihyo.jp",
+      "tier": 2,
+      "category": "japanese_media",
+      "language": "ja",
+      "url": "https://gihyo.jp/feed/rss2",
+      "enabled": true,
+      "keyword_filter": "ai_required",
+      "notes": "エンジニア向け深め、AI以外も来る"
+    },
+    {
+      "name": "AIsmiley",
+      "tier": 2,
+      "category": "japanese_media",
+      "language": "ja",
+      "url": "https://aismiley.co.jp/feed/",
+      "enabled": true,
+      "notes": "サービス紹介系。ハイプの典型で、辛口批評の燃料になる"
+    },
+    {
+      "name": "The Decoder",
+      "tier": 3,
+      "category": "english_media",
+      "language": "en",
+      "url": "https://the-decoder.com/feed/",
+      "enabled": true,
+      "notes": "分析が深い"
+    },
+    {
+      "name": "Marktechpost",
+      "tier": 3,
+      "category": "english_media",
+      "language": "en",
+      "url": "https://www.marktechpost.com/feed/",
+      "enabled": true,
+      "notes": "論文紹介中心"
+    },
+    {
+      "name": "Ars Technica",
+      "tier": 3,
+      "category": "english_media",
+      "language": "en",
+      "url": "https://feeds.arstechnica.com/arstechnica/index/",
+      "enabled": true,
+      "keyword_filter": "ai_required",
+      "notes": "AI以外も来る、要キーワードフィルタ"
+    },
+    {
+      "name": "TechCrunch AI",
+      "tier": 3,
+      "category": "english_media",
+      "language": "en",
+      "url": "https://techcrunch.com/category/artificial-intelligence/feed/",
+      "enabled": true,
+      "notes": "資金調達ニュース"
+    },
+    {
+      "name": "MIT Technology Review",
+      "tier": 3,
+      "category": "english_media",
+      "language": "en",
+      "url": "https://www.technologyreview.com/feed/",
+      "enabled": true,
+      "keyword_filter": "ai_required",
+      "notes": "長文・分析的、AI以外も来る"
+    },
+    {
+      "name": "Marcus on AI",
+      "tier": 4,
+      "category": "critic",
+      "language": "en",
+      "url": "https://garymarcus.substack.com/feed",
+      "enabled": true,
+      "notes": "Gary Marcus、LLMの限界を継続的に批判。批評の引き出し源"
+    },
+    {
+      "name": "AI Snake Oil",
+      "tier": 4,
+      "category": "critic",
+      "language": "en",
+      "url": "https://www.aisnakeoil.com/feed",
+      "enabled": true,
+      "notes": "Arvind Narayanan、ハイプ批判、評価の問題"
+    },
+    {
+      "name": "Where's Your Ed At",
+      "tier": 4,
+      "category": "critic",
+      "language": "en",
+      "url": "https://www.wheresyoured.at/feed",
+      "enabled": true,
+      "notes": "Ed Zitron、AIバブル懐疑論者"
+    },
+    {
+      "name": "404 Media",
+      "tier": 4,
+      "category": "critic",
+      "language": "en",
+      "url": "https://www.404media.co/rss",
+      "enabled": true,
+      "keyword_filter": "ai_required",
+      "notes": "調査報道、AI懐疑的、AI以外も来る"
+    },
+    {
+      "name": "Import AI",
+      "tier": 4,
+      "category": "critic",
+      "language": "en",
+      "url": "https://importai.substack.com/feed",
+      "enabled": true,
+      "notes": "Jack Clark (Anthropic共同創業者) のニュースレター、技術解説"
+    },
+    {
+      "name": "Hacker News (AI filtered)",
+      "tier": 5,
+      "category": "community",
+      "language": "en",
+      "url": "https://hnrss.org/newest?q=AI+OR+LLM+OR+GPT",
+      "enabled": true,
+      "notes": "hnrss.org経由でAI絞り込み"
+    },
+    {
+      "name": "Reddit r/LocalLLaMA",
+      "tier": 5,
+      "category": "community",
+      "language": "en",
+      "url": "https://www.reddit.com/r/LocalLLaMA/.rss",
+      "enabled": true,
+      "notes": "OSSモデル界隈"
+    },
+    {
+      "name": "Reddit r/MachineLearning",
+      "tier": 5,
+      "category": "community",
+      "language": "en",
+      "url": "https://www.reddit.com/r/MachineLearning/.rss",
+      "enabled": true,
+      "notes": "学術寄り、論文共有"
+    }
+  ],
+  "keyword_filters": {
+    "ai_required": [
+      "AI",
+      "LLM",
+      "GPT",
+      "Claude",
+      "Gemini",
+      "生成AI",
+      "機械学習",
+      "AGI",
+      "人工知能",
+      "agent",
+      "エージェント",
+      "ChatGPT",
+      "Anthropic",
+      "OpenAI",
+      "Google AI",
+      "DeepMind",
+      "Meta AI",
+      "transformer",
+      "neural network",
+      "deep learning",
+      "diffusion model",
+      "RAG",
+      "embedding",
+      "fine-tuning"
+    ],
+    "exclude": [
+      "転職",
+      "求人",
+      "セール",
+      "クーポン",
+      "PR：",
+      "[PR]"
+    ]
+  },
+  "thresholds": {
+    "relevance_score_min": 0.7,
+    "max_articles_per_day": 50,
+    "lookback_hours": 24,
+    "similarity_threshold_for_dedup": 0.85,
+    "fetch_timeout_seconds": 5,
+    "consecutive_failures_before_alert": 30
+  },
+  "url_normalization": {
+    "remove_query_params": ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "fbclid", "gclid", "mc_cid", "mc_eid"],
+    "remove_trailing_slash": true,
+    "lowercase_scheme_host": true
+  }
+}
