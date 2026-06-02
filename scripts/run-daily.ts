@@ -12,6 +12,7 @@ import {
   closeDb,
 } from '../lib/blog-db'
 import { generateAndStoreCover } from '../lib/image-gen'
+import { notifyPublished } from '../lib/slack-notify'
 import fs from 'fs'
 import path from 'path'
 
@@ -150,6 +151,7 @@ async function main(): Promise<void> {
 
   // Step 8: カバー画像生成（best-effort）。
   // 失敗しても記事は published のまま継続し、cover_image_url=NULL で残す。
+  let coverUrl: string | null = null
   try {
     log('[IMAGE_GEN] Generating cover image (Claude prompt + DALL-E 3)...')
     const cover = await generateAndStoreCover(result.id, {
@@ -158,10 +160,20 @@ async function main(): Promise<void> {
       topicTags: generated.topic_tags,
     })
     await updateCoverImage(result.id, cover.url, cover.prompt)
+    coverUrl = cover.url
     log(`[IMAGE_GEN] success article=${result.id} url=${cover.url}`)
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e)
     log(`[IMAGE_GEN] FAILED article=${result.id} reason=${reason} (記事公開は継続)`)
+  }
+
+  // Step 9: Slack DM 通知（best-effort）。失敗しても公開フローは止めない。
+  if (published) {
+    await notifyPublished({
+      title: generated.title,
+      url: `${blogUrl}/articles/${result.id}`,
+      coverImageUrl: coverUrl,
+    })
   }
 
   log('=== Daily blog run COMPLETE ===')
