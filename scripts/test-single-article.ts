@@ -2,7 +2,7 @@ import { loadEnv } from '../lib/load-env'
 loadEnv()
 import { fetchAndParseUrl } from '../lib/rss'
 import { generateArticle } from '../skills/generate-article/handlers'
-import { insertArticle } from '../lib/blog-db'
+import { initSchema, insertArticle, closeDb } from '../lib/blog-db'
 
 async function main() {
   const newsUrl = process.argv[2]
@@ -28,10 +28,16 @@ async function main() {
 
   if (process.env.RUN_MODE !== 'dry_run') {
     console.log('\nドラフトとしてブログDBに保存中...')
-    const result = insertArticle({
+    await initSchema()
+    const result = await insertArticle({
       title: article.title,
       content: article.body,
       published: false,
+      structureType: article.structure_type,
+      topicTags: article.topic_tags,
+      namedEntities: article.named_entities,
+      sourceUrl: sourceArticle.url,
+      sourceTitle: sourceArticle.title,
     })
     console.log(`保存完了: Article ID = ${result.id}`)
     console.log(
@@ -42,4 +48,6 @@ async function main() {
   }
 }
 
-main().catch(console.error)
+main()
+  .catch(console.error)
+  .finally(() => closeDb())

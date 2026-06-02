@@ -3,66 +3,45 @@ loadEnv()
 
 import { fetchAllFeeds, fetchAndParseUrl } from '../lib/rss'
 import { generateArticle, GeneratedArticle } from '../skills/generate-article/handlers'
-import { insertArticle } from '../lib/blog-db'
+import {
+  initSchema,
+  insertArticle,
+  getPastStructureTypes,
+  getPastTopics,
+  closeDb,
+} from '../lib/blog-db'
 import fs from 'fs'
 import path from 'path'
 
-const SOUL_PATH = path.resolve(__dirname, '../memory/SOUL.md')
 const LOG_DIR = path.resolve(__dirname, '../logs')
+
+// RUN_MODE:
+//   dry_run        … 記事生成まで行うが DB へは書き込まない
+//   publish        … published=true で公開保存
+//   draft（既定）  … published=false で下書き保存
+const RUN_MODE = process.env.RUN_MODE ?? 'draft'
 
 function log(msg: string): void {
   const ts = new Date().toISOString()
   const line = `[${ts}] ${msg}\n`
+  // Cloud Run のログは stderr を拾う。ファイルログはローカル実行時のみ best-effort。
   process.stderr.write(line)
-  if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true })
-  fs.appendFileSync(path.join(LOG_DIR, 'daily.log'), line)
-}
-
-function readSoul(): { pastStructureTypes: number[]; pastTopics: string[] } {
-  const content = fs.readFileSync(SOUL_PATH, 'utf-8')
-
-  const structureTypes: number[] = []
-  const topics: string[] = []
-
-  const structureMatch = content.match(/## 構成タイプ使用履歴（直近10件）\n([\s\S]*?)(?=\n## |$)/)
-  if (structureMatch) {
-    const nums = structureMatch[1].match(/Type(\d+)/g)
-    if (nums) structureTypes.push(...nums.map((s) => parseInt(s.replace('Type', ''), 10)))
+  try {
+    if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true })
+    fs.appendFileSync(path.join(LOG_DIR, 'daily.log'), line)
+  } catch {
+    // コンテナの読み取り専用 FS 等では握りつぶす
   }
-
-  const topicMatch = content.match(/## 過去7日のトピック（重複回避用）\n([\s\S]*?)(?=\n## |$)/)
-  if (topicMatch) {
-    const lines = topicMatch[1].split('\n').filter((l) => l.startsWith('- '))
-    topics.push(...lines.map((l) => l.replace(/^- /, '').trim()))
-  }
-
-  return { pastStructureTypes: structureTypes, pastTopics: topics }
-}
-
-function updateSoul(article: GeneratedArticle, sourceTitle: string): void {
-  const today = new Date().toISOString().slice(0, 10)
-  const appendBlock = `
-## 運用ログ ${today}
-- タイトル: ${article.title}
-- 元ネタ: ${sourceTitle}
-- 構成タイプ: Type${article.structure_type}
-- トピックタグ: ${article.topic_tags.join(', ')}
-- 名指し企業: ${article.named_entities.join(', ') || 'なし'}
-`
-  fs.appendFileSync(SOUL_PATH, appendBlock)
-
-  // 過去7日トピックを更新（初期化済みテキストを最初のエントリに置換）
-  let content = fs.readFileSync(SOUL_PATH, 'utf-8')
-  const newTopicLine = `- ${article.topic_tags[0] ?? article.title} (${today})`
-  content = content.replace(
-    '## 過去7日のトピック（重複回避用）\n(初期化済み)',
-    `## 過去7日のトピック（重複回避用）\n${newTopicLine}`,
-  )
-  fs.writeFileSync(SOUL_PATH, content)
 }
 
 async function main(): Promise<void> {
-  log('=== Daily blog run START ===')
+  log(`=== Daily blog run START (RUN_MODE=${RUN_MODE}) ===`)
+
+  // Step 0: スキーマ初期化（冪等）。初回実行がそのままマイグレーションになる。
+  if (RUN_MODE !== 'dry_run') {
+    await initSchema()
+    log('Schema ready (blog_articles)')
+  }
 
   // Step 1: RSS フィード取得
   log('Step 1: Fetching RSS feeds...')
@@ -80,28 +59,45 @@ async function main(): Promise<void> {
   }
   log(`Found ${articles.length} articles`)
 
-  // Step 2: 最良記事を選定（Tier昇順 → 新着順）
-  const best = [...articles].sort(
+  // Step 2: 候補を優先順位付け（Tier昇順 → 新着順）
+  const candidates = [...articles].sort(
     (a, b) =>
       a.source_tier - b.source_tier ||
       b.published_at.getTime() - a.published_at.getTime(),
-  )[0]
-  log(`Selected: [Tier${best.source_tier} ${best.source_name}] ${best.title}`)
+  )
 
-  // Step 3: 本文取得
-  log(`Fetching full content: ${best.url}`)
-  let sourceArticle
-  try {
-    sourceArticle = await fetchAndParseUrl(best.url)
-  } catch (e) {
-    log(`Content fetch failed: ${String(e)}`)
-    process.exit(1)
+  // Step 3: 本文取得（先頭から順に試し、取得できた最初の記事を採用）。
+  // データセンターIPからは一部メディア(openai.com等)が403を返すため、
+  // 1記事の失敗で全体を落とさず次候補にフォールバックする。
+  let best: (typeof candidates)[number] | undefined
+  let sourceArticle: Awaited<ReturnType<typeof fetchAndParseUrl>> | undefined
+  const MAX_TRIES = 8
+  for (const cand of candidates.slice(0, MAX_TRIES)) {
+    log(`Trying: [Tier${cand.source_tier} ${cand.source_name}] ${cand.title}`)
+    try {
+      sourceArticle = await fetchAndParseUrl(cand.url)
+      best = cand
+      break
+    } catch (e) {
+      log(`  skip (fetch failed): ${String(e)}`)
+    }
   }
 
-  // Step 4: SOUL.md から過去コンテキスト読み込み
-  const soul = readSoul()
-  log(`Past structure types: [${soul.pastStructureTypes.join(',')}]`)
-  log(`Past topics: ${soul.pastTopics.length} topics`)
+  if (!best || !sourceArticle) {
+    log(`Content fetch failed for all ${Math.min(candidates.length, MAX_TRIES)} candidates. Exiting.`)
+    process.exit(1)
+  }
+  log(`Selected: [Tier${best.source_tier} ${best.source_name}] ${best.title}`)
+
+  // Step 4: 過去コンテキスト読み込み（DB から導出。SOUL.md の代替）
+  let pastStructureTypes: number[] = []
+  let pastTopics: string[] = []
+  if (RUN_MODE !== 'dry_run') {
+    pastStructureTypes = await getPastStructureTypes(10)
+    pastTopics = await getPastTopics(7)
+  }
+  log(`Past structure types: [${pastStructureTypes.join(',')}]`)
+  log(`Past topics: ${pastTopics.length} topics`)
 
   // Step 5: 記事生成（3回リトライは handlers.ts 内で処理済み）
   log('Generating article via Claude Sonnet 4...')
@@ -109,8 +105,8 @@ async function main(): Promise<void> {
   try {
     generated = await generateArticle({
       source_article: sourceArticle,
-      past_structure_types: soul.pastStructureTypes,
-      similar_past_topics: soul.pastTopics,
+      past_structure_types: pastStructureTypes,
+      similar_past_topics: pastTopics,
     })
   } catch (e) {
     log(`Article generation failed: ${String(e)}`)
@@ -124,18 +120,31 @@ async function main(): Promise<void> {
     log(`Safety: criticizes real entity | concerns: ${sc.potential_concerns}`)
   }
 
-  // Step 7: ブログDB に保存（draft）
-  const result = insertArticle({
+  // Step 7: ブログDB に保存
+  if (RUN_MODE === 'dry_run') {
+    log('[dry_run] DB write skipped')
+    process.stdout.write(
+      JSON.stringify({ dry_run: true, title: generated.title }) + '\n',
+    )
+    log('=== Daily blog run COMPLETE (dry_run) ===')
+    return
+  }
+
+  const published = RUN_MODE === 'publish'
+  const result = await insertArticle({
     title: generated.title,
     content: generated.body,
-    published: false,
+    published,
+    structureType: generated.structure_type,
+    topicTags: generated.topic_tags,
+    namedEntities: generated.named_entities,
+    sourceTitle: best.title,
+    sourceUrl: best.url,
   })
   const blogUrl = process.env.BLOG_PUBLIC_URL ?? 'http://localhost:3000'
-  log(`Saved: Article ID=${result.id} → ${blogUrl}/articles/${result.id}`)
-
-  // Step 8: SOUL.md 更新
-  updateSoul(generated, best.title)
-  log('SOUL.md updated')
+  log(
+    `Saved: Article ID=${result.id} (published=${published}) → ${blogUrl}/articles/${result.id}`,
+  )
 
   log('=== Daily blog run COMPLETE ===')
   process.stdout.write(
@@ -143,11 +152,22 @@ async function main(): Promise<void> {
       id: result.id,
       url: `${blogUrl}/articles/${result.id}`,
       title: generated.title,
+      published,
     }) + '\n',
   )
 }
 
-main().catch((e: Error) => {
-  log(`FATAL: ${e.message}\n${e.stack ?? ''}`)
-  process.exit(1)
-})
+main()
+  .then(() => {
+    process.exitCode = 0
+  })
+  .catch((e: Error) => {
+    log(`FATAL: ${e.message}\n${e.stack ?? ''}`)
+    process.exitCode = 1
+  })
+  .finally(async () => {
+    // バッチJobなので明示終了する。pg プールや undici(keep-alive) の
+    // オープンハンドルが残るとプロセスが終了せず task-timeout まで張り付くため。
+    await closeDb()
+    process.exit(process.exitCode ?? 0)
+  })

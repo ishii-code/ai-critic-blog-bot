@@ -1,7 +1,7 @@
 import { loadEnv } from '../lib/load-env'
 loadEnv()
 
-import { insertArticle } from '../lib/blog-db'
+import { initSchema, insertArticle, closeDb } from '../lib/blog-db'
 
 interface ArticleInput {
   title: string
@@ -23,7 +23,8 @@ async function main() {
   const raw = process.argv[2] ?? (await readStdin())
   const input = JSON.parse(raw) as ArticleInput
 
-  const result = insertArticle({
+  await initSchema()
+  const result = await insertArticle({
     title: input.title,
     content: input.content ?? input.body ?? '',
     published: process.env.INITIAL_POST_STATUS === 'published' ? (input.published ?? false) : false,
@@ -35,7 +36,9 @@ async function main() {
   process.stdout.write(JSON.stringify({ id: result.id, url }) + '\n')
 }
 
-main().catch((e: Error) => {
-  process.stderr.write(JSON.stringify({ error: e.message }) + '\n')
-  process.exit(1)
-})
+main()
+  .catch((e: Error) => {
+    process.stderr.write(JSON.stringify({ error: e.message }) + '\n')
+    process.exitCode = 1
+  })
+  .finally(() => closeDb())
