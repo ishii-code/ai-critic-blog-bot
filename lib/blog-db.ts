@@ -13,7 +13,27 @@ function getPool(): Pool {
     if (!connectionString) {
       throw new Error('DATABASE_URL が設定されていません')
     }
-    _pool = new Pool({ connectionString, max: 2 })
+    // 接続形式に応じて SSL を自動切り替え。
+    // - unix socket（Cloud Run + Cloud SQL）/ localhost: 暗号化済み or 平文 → SSL 無効
+    // - パブリック IP 直結（ローカル検証）: Cloud SQL は TLS 必須 → SSL 有効
+    // host が URL エンコード（host=%2Fcloudsql%2F...）されるケースにも対応。
+    const haystack = connectionString.toLowerCase()
+    let decoded = haystack
+    try {
+      decoded = decodeURIComponent(haystack)
+    } catch {
+      // 不正な % が含まれる場合はデコード前で判定
+    }
+    const isSocket =
+      decoded.includes('/cloudsql/') || decoded.includes('host=/')
+    const isLocalhost =
+      decoded.includes('localhost') || decoded.includes('127.0.0.1')
+    const useSsl = !isSocket && !isLocalhost
+    _pool = new Pool({
+      connectionString,
+      max: 2,
+      ssl: useSsl ? { rejectUnauthorized: false } : undefined,
+    })
   }
   return _pool
 }
@@ -49,6 +69,12 @@ export async function initSchema(): Promise<void> {
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_blog_articles_created_at ON blog_articles (created_at DESC)`,
   )
+  // カバー画像カラム（DALL-E 3 自動生成）。既存テーブルにも冪等に追加する。
+  await pool.query(`
+    ALTER TABLE blog_articles ADD COLUMN IF NOT EXISTS cover_image_url TEXT;
+    ALTER TABLE blog_articles ADD COLUMN IF NOT EXISTS cover_image_prompt TEXT;
+    ALTER TABLE blog_articles ADD COLUMN IF NOT EXISTS cover_image_generated_at TIMESTAMP;
+  `)
 }
 
 export interface InsertArticleInput {
@@ -119,4 +145,78 @@ export async function getPastTopics(days = 7): Promise<string[]> {
     if (Array.isArray(row.topic_tags)) topics.push(...row.topic_tags)
   }
   return Array.from(new Set(topics))
+}
+
+// ===== カバー画像（DALL-E 3 自動生成）=====
+
+/** カバー画像生成に必要な記事フィールド。 */
+export interface ArticleForCover {
+  id: number
+  title: string
+  content: string
+  topicTags: string[]
+}
+
+interface ArticleForCoverRow {
+  id: number
+  title: string
+  content: string
+  topic_tags: unknown
+}
+
+function rowToArticleForCover(row: ArticleForCoverRow): ArticleForCover {
+  return {
+    id: row.id,
+    title: row.title,
+    content: row.content,
+    topicTags: Array.isArray(row.topic_tags)
+      ? row.topic_tags.filter((t): t is string => typeof t === 'string')
+      : [],
+  }
+}
+
+/** ID 指定で 1 記事を取得（カバー生成用）。存在しなければ null。 */
+export async function getArticleForCover(
+  id: number,
+): Promise<ArticleForCover | null> {
+  const pool = getPool()
+  const res = await pool.query<ArticleForCoverRow>(
+    `SELECT id, title, content, topic_tags FROM blog_articles WHERE id = $1`,
+    [id],
+  )
+  if (res.rows.length === 0) return null
+  return rowToArticleForCover(res.rows[0])
+}
+
+/** cover_image_url が未設定の記事を取得（古い順）。 */
+export async function listArticlesMissingCover(
+  limit = 100,
+): Promise<ArticleForCover[]> {
+  const pool = getPool()
+  const res = await pool.query<ArticleForCoverRow>(
+    `SELECT id, title, content, topic_tags FROM blog_articles
+     WHERE cover_image_url IS NULL
+     ORDER BY id ASC
+     LIMIT $1`,
+    [limit],
+  )
+  return res.rows.map(rowToArticleForCover)
+}
+
+/** 生成済みカバー画像の URL とプロンプトを記事に保存する。 */
+export async function updateCoverImage(
+  id: number,
+  coverImageUrl: string,
+  coverImagePrompt: string,
+): Promise<void> {
+  const pool = getPool()
+  await pool.query(
+    `UPDATE blog_articles
+       SET cover_image_url = $2,
+           cover_image_prompt = $3,
+           cover_image_generated_at = now(),
+           updated_at = now()
+     WHERE id = $1`,
+    [id, coverImageUrl, coverImagePrompt],
+  )
 }

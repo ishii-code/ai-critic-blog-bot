@@ -8,10 +8,13 @@
     "fetch-news": "tsx scripts/cli-fetch-news.ts",
     "publish-blog": "tsx scripts/cli-publish-blog.ts",
     "run-daily": "tsx scripts/run-daily.ts",
+    "generate-cover-images": "tsx scripts/generate-cover-images.ts",
     "migrate": "tsx scripts/migrate.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "latest",
+    "@google-cloud/storage": "^7.19.0",
+    "openai": "^6.41.0",
     "pg": "^8.13.1",
     "rss-parser": "^3.13.0",
     "tsx": "^4.19.3"

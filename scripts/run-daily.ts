@@ -6,10 +6,12 @@ import { generateArticle, GeneratedArticle } from '../skills/generate-article/ha
 import {
   initSchema,
   insertArticle,
+  updateCoverImage,
   getPastStructureTypes,
   getPastTopics,
   closeDb,
 } from '../lib/blog-db'
+import { generateAndStoreCover } from '../lib/image-gen'
 import fs from 'fs'
 import path from 'path'
 
@@ -145,6 +147,22 @@ async function main(): Promise<void> {
   log(
     `Saved: Article ID=${result.id} (published=${published}) → ${blogUrl}/articles/${result.id}`,
   )
+
+  // Step 8: カバー画像生成（best-effort）。
+  // 失敗しても記事は published のまま継続し、cover_image_url=NULL で残す。
+  try {
+    log('[IMAGE_GEN] Generating cover image (Claude prompt + DALL-E 3)...')
+    const cover = await generateAndStoreCover(result.id, {
+      title: generated.title,
+      content: generated.body,
+      topicTags: generated.topic_tags,
+    })
+    await updateCoverImage(result.id, cover.url, cover.prompt)
+    log(`[IMAGE_GEN] success article=${result.id} url=${cover.url}`)
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e)
+    log(`[IMAGE_GEN] FAILED article=${result.id} reason=${reason} (記事公開は継続)`)
+  }
 
   log('=== Daily blog run COMPLETE ===')
   process.stdout.write(
