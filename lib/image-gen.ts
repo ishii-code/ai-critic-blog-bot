@@ -3,13 +3,13 @@ import OpenAI from 'openai'
 import { Storage } from '@google-cloud/storage'
 
 // 記事内容ベースのカバー画像自動生成。
-//   1. Claude API で記事 → DALL-E 3 用の英語プロンプトを生成
-//   2. OpenAI DALL-E 3 で 16:9 画像を生成（1792x1024 / standard）
+//   1. Claude API で記事 → gpt-image-1 用の英語プロンプトを生成
+//   2. OpenAI gpt-image-1 で横長画像を生成（1536x1024 / 3:2）
 //   3. Google Cloud Storage にアップロードし公開 URL を返す
 //
 // 必要な環境変数:
 //   ANTHROPIC_API_KEY … プロンプト生成（Claude）
-//   OPENAI_API_KEY    … 画像生成（DALL-E 3）
+//   OPENAI_API_KEY    … 画像生成（gpt-image-1）
 //   GCS_BUCKET_NAME   … アップロード先バケット
 
 const PROMPT_MODEL = 'claude-sonnet-4-6'
@@ -58,17 +58,21 @@ function getBucketName(): string {
 }
 
 /**
- * 記事の title / content / topic_tags から DALL-E 3 用の英語プロンプトを生成する。
+ * 記事の title / content / topic_tags から gpt-image-1 用の英語プロンプトを生成する。
  */
 export async function generateCoverPrompt(source: CoverSource): Promise<string> {
   const client = new Anthropic()
   const excerpt = source.content.slice(0, 500)
-  const instruction = `以下のブログ記事のカバー画像を生成するための、英語のDALL-E 3用プロンプトを作成してください。
-- 抽象的・概念的でテック記事に映える
-- ダーク調・モダン・ミニマル
-- 文字は入れない
-- 16:9アスペクト比想定
-- リテラルではなく比喩的表現
+  const instruction = `以下のブログ記事のカバー画像を生成するための、英語の画像生成プロンプト（gpt-image-1用）を作成してください。
+
+【最重要】記事の中心的な主題・出来事を、見ただけで「何の話か」が伝わる具体的なシーン／被写体として描写すること。抽象的なグラデーションや幾何学模様だけで済ませてはいけない。記事のキーとなる対象（製品・技術・現象・状況）を象徴する具体物・場面・行為を主役に据える。
+
+スタイル要件:
+- modern editorial illustration（一流テックメディアのトップ記事カバー調）。クリーンで洗練され、ダーク寄りのモダンなトーンで統一する。
+- 構図は横長 3:2。主題が一目で分かる明快なフォーカルポイントを持たせる。
+- 実在企業のロゴ・商標・実在人物の顔は描かない。主題は一般化したモチーフ（無印の機器、象徴的なシルエット、抽象化したアイコン的表現など）で伝える。
+- 画像内に文字・ロゴ・単語・数字を一切入れない。
+
 タイトル: ${source.title}
 タグ: ${source.topicTags.join(', ')}
 内容抜粋: ${excerpt}
